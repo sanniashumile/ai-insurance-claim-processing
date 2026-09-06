@@ -1,0 +1,261 @@
+{
+  "name": "Workflow 5 - Scheduled Follow-up",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "id": "4f0d6225-5e8f-4e1c-8269-458d041241bb",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        1584,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appxYnrhgf7b3FGkV",
+          "mode": "list",
+          "cachedResultName": "AI Insurance Claim Processing",
+          "cachedResultUrl": "https://airtable.com/appxYnrhgf7b3FGkV"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblw6LJymbNlLEyxd",
+          "mode": "list",
+          "cachedResultName": "Claims",
+          "cachedResultUrl": "https://airtable.com/appxYnrhgf7b3FGkV/tblw6LJymbNlLEyxd"
+        },
+        "filterByFormula": "=OR({Status}=\"Submitted\",{Status}=\"Under Review\",{Status}=\"Additional Documents Required\")",
+        "options": {}
+      },
+      "id": "37435a7d-1101-4893-8d4b-3c4b1e0554f0",
+      "name": "Get Pending Claims",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [
+        1808,
+        0
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "HjfLUWzTpbOTuvmr",
+          "name": "Airtable account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Handle both possible Airtable output shapes: nested under 'fields', or flattened onto $json directly\nconst src = ($json.fields && typeof $json.fields === 'object') ? $json.fields : $json;\nconst claimId = $json.id;\nconst claimantName = src['Claimant Name'] || 'Claimant';\nconst claimantEmail = src['Claimant Email'];\nconst status = src['Status'] || 'Pending';\nconst policyNumber = src['Policy Number'] || '';\n\nconst subject = `Reminder: Your claim ${claimId} is still ${status}`;\nconst body = `Dear ${claimantName},\\n\\nThis is a friendly reminder that your insurance claim (ID: ${claimId}, Policy: ${policyNumber}) is currently marked as \"${status}\" and still requires action.\\n\\nIf you have already responded or submitted the requested documents, please disregard this message. Otherwise, please follow up at your earliest convenience.\\n\\nThank you.`;\nconst followUpSummary = `Reminder sent for claim ${claimId} (status: ${status})`;\n\nreturn {\n  json: {\n    claimId,\n    claimantName,\n    claimantEmail,\n    status,\n    subject,\n    body,\n    followUpSummary\n  }\n};"
+      },
+      "id": "a65cf078-6bb4-46f4-b954-eb5f259cfe8b",
+      "name": "Build Reminder",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2032,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.claimantEmail }}",
+        "subject": "={{ $json.subject }}",
+        "emailType": "text",
+        "message": "={{ $json.body }}",
+        "options": {}
+      },
+      "id": "e6c572b7-c93f-4b71-95b6-d946bcae3574",
+      "name": "Send Reminder Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        2256,
+        0
+      ],
+      "webhookId": "202c352f-d7fc-4667-aae7-56f848b621d8",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "PtDgUWHe1LIiQKdx",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appxYnrhgf7b3FGkV",
+          "mode": "list",
+          "cachedResultName": "AI Insurance Claim Processing",
+          "cachedResultUrl": "https://airtable.com/appxYnrhgf7b3FGkV"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbl0bINgthCpnxSWd",
+          "mode": "list",
+          "cachedResultName": "FollowUps",
+          "cachedResultUrl": "https://airtable.com/appxYnrhgf7b3FGkV/tbl0bINgthCpnxSWd"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Follow-up Summary": "={{ $('Build Reminder').item.json.followUpSummary }}",
+            "Follow-up Date": "={{ $now.toISO() }}",
+            "Reminder Sent": true,
+            "Notes": "={{ $('Build Reminder').item.json.body }}",
+            "Claim": "={{ [$('Build Reminder').item.json.claimId] }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Follow-up Summary",
+              "displayName": "Follow-up Summary",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Follow-up Date",
+              "displayName": "Follow-up Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Reminder Sent",
+              "displayName": "Reminder Sent",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Notes",
+              "displayName": "Notes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Claim",
+              "displayName": "Claim",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "8f5d7d28-89a7-4922-9b11-0a683a06c6d7",
+      "name": "Log Follow-Up",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [
+        2480,
+        0
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "HjfLUWzTpbOTuvmr",
+          "name": "Airtable account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Pending Claims",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Pending Claims": {
+      "main": [
+        [
+          {
+            "node": "Build Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Reminder": {
+      "main": [
+        [
+          {
+            "node": "Send Reminder Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Reminder Email": {
+      "main": [
+        [
+          {
+            "node": "Log Follow-Up",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "7054ce6f-dbf6-4bed-9c79-f517407b33b9",
+  "meta": {
+    "instanceId": "6c88e9ba816fa3c2c21cc6f51641bc44d7a6e14d10bcd648c3e55bddc47779ac"
+  },
+  "nodeGroups": [],
+  "id": "EsDiDKDGmQjoVl4N",
+  "tags": []
+}

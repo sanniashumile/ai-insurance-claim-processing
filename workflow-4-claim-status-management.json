@@ -1,0 +1,463 @@
+{
+  "name": "Workflow 4 - Claim Status Management",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "claim-status-update",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "013e9ddf-ceb1-4776-ab01-9aa867534fb9",
+      "name": "Webhook1",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        352,
+        96
+      ],
+      "webhookId": "claim-status-update"
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appxYnrhgf7b3FGkV",
+          "mode": "list",
+          "cachedResultName": "AI Insurance Claim Processing",
+          "cachedResultUrl": "https://airtable.com/appxYnrhgf7b3FGkV"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblw6LJymbNlLEyxd",
+          "mode": "list",
+          "cachedResultName": "Claims",
+          "cachedResultUrl": "https://airtable.com/appxYnrhgf7b3FGkV/tblw6LJymbNlLEyxd"
+        },
+        "filterByFormula": "=RECORD_ID()=\"{{ $json.body.claimId }}\"",
+        "options": {}
+      },
+      "id": "b2889197-e42c-4ec8-b974-6fb9208083a9",
+      "name": "Get Claim1",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [
+        576,
+        96
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "HjfLUWzTpbOTuvmr",
+          "name": "Airtable account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $('Webhook1').item.json.body;\nconst status = body.newStatus;\nconst note = body.note || '';\nconst claim = $json.fields || {};\nconst claimantName = claim['Claimant Name'] || 'Claimant';\nconst claimantEmail = claim['Claimant Email'];\nconst claimId = $json.id;\n\nconst messages = {\n  'Under Review': {\n    subject: `Your claim ${claimId} is now Under Review`,\n    body: `Dear ${claimantName},\\n\\nYour insurance claim (ID: ${claimId}) is now under review by our team. We will notify you of any updates.\\n\\n${note}\\n\\nThank you.`\n  },\n  'Additional Documents Required': {\n    subject: `Action needed: Additional documents required for claim ${claimId}`,\n    body: `Dear ${claimantName},\\n\\nWe need additional documents to continue processing your claim (ID: ${claimId}). ${note}\\n\\nPlease resubmit at your earliest convenience.\\n\\nThank you.`\n  },\n  'Approved': {\n    subject: `Your claim ${claimId} has been approved`,\n    body: `Dear ${claimantName},\\n\\nGood news! Your claim (ID: ${claimId}) has been approved. ${note}\\n\\nThank you for your patience.`\n  },\n  'Rejected': {\n    subject: `Update on your claim ${claimId}`,\n    body: `Dear ${claimantName},\\n\\nAfter careful review, your claim (ID: ${claimId}) has been rejected. ${note}\\n\\nIf you have questions, please contact us.`\n  },\n  'Closed': {\n    subject: `Your claim ${claimId} has been closed`,\n    body: `Dear ${claimantName},\\n\\nYour claim (ID: ${claimId}) has been closed. ${note}\\n\\nThank you.`\n  }\n};\n\nconst msg = messages[status] || {\n  subject: `Update on your claim ${claimId}`,\n  body: `Dear ${claimantName},\\n\\nYour claim status has been updated to: ${status}. ${note}`\n};\n\nreturn [{\n  json: {\n    claimId,\n    claimantName,\n    claimantEmail,\n    status,\n    subject: msg.subject,\n    body: msg.body\n  }\n}];"
+      },
+      "id": "2e0e558c-4a0e-459e-a755-a860b1c018e6",
+      "name": "Build Notification1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appxYnrhgf7b3FGkV",
+          "mode": "list",
+          "cachedResultName": "AI Insurance Claim Processing",
+          "cachedResultUrl": "https://airtable.com/appxYnrhgf7b3FGkV"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblw6LJymbNlLEyxd",
+          "mode": "list",
+          "cachedResultName": "Claims",
+          "cachedResultUrl": "https://airtable.com/appxYnrhgf7b3FGkV/tblw6LJymbNlLEyxd"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Status": "={{ $json.status }}",
+            "id": "={{ $json.claimId }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": false
+            },
+            {
+              "id": "Claimant Name",
+              "displayName": "Claimant Name",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Claimant Email",
+              "displayName": "Claimant Email",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Policy Number",
+              "displayName": "Policy Number",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Claim Type",
+              "displayName": "Claim Type",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Auto",
+                  "value": "Auto"
+                },
+                {
+                  "name": "Health",
+                  "value": "Health"
+                },
+                {
+                  "name": "Property",
+                  "value": "Property"
+                },
+                {
+                  "name": "Life",
+                  "value": "Life"
+                },
+                {
+                  "name": "Other",
+                  "value": "Other"
+                },
+                {
+                  "name": "Home",
+                  "value": "Home"
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Incident Date",
+              "displayName": "Incident Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Description",
+              "displayName": "Description",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Submitted",
+                  "value": "Submitted"
+                },
+                {
+                  "name": "Under Review",
+                  "value": "Under Review"
+                },
+                {
+                  "name": "Additional Documents Required",
+                  "value": "Additional Documents Required"
+                },
+                {
+                  "name": "Approved",
+                  "value": "Approved"
+                },
+                {
+                  "name": "Rejected",
+                  "value": "Rejected"
+                },
+                {
+                  "name": "Closed",
+                  "value": "Closed"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Priority",
+              "displayName": "Priority",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Low",
+                  "value": "Low"
+                },
+                {
+                  "name": "Medium",
+                  "value": "Medium"
+                },
+                {
+                  "name": "High",
+                  "value": "High"
+                },
+                {
+                  "name": "Urgent",
+                  "value": "Urgent"
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "AI Summary",
+              "displayName": "AI Summary",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Suspicious",
+              "displayName": "Suspicious",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Missing Fields",
+              "displayName": "Missing Fields",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Submitted Date",
+              "displayName": "Submitted Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Documents",
+              "displayName": "Documents",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "FollowUps",
+              "displayName": "FollowUps",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "ee7c2939-d9aa-4685-a596-ca8351a9833f",
+      "name": "Update Status1",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [
+        1024,
+        96
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "HjfLUWzTpbOTuvmr",
+          "name": "Airtable account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "=={{ $('Build Notification1').item.json.claimantEmail || $json.fields['Claimant Email'] }}",
+        "subject": "={{ $('Build Notification1').item.json.subject }}",
+        "emailType": "text",
+        "message": "={{ $('Build Notification1').item.json.body }}",
+        "options": {}
+      },
+      "id": "26a0204e-cbdc-40ce-9a55-2659254d73af",
+      "name": "Send Email1",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1232,
+        96
+      ],
+      "webhookId": "73b3a201-ae47-47ac-8818-0dea7240ef51",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "PtDgUWHe1LIiQKdx",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { status: \"success\", claimId: $('Build Notification1').item.json.claimId, newStatus: $('Build Notification1').item.json.status, claimantEmail: $('Build Notification1').item.json.claimantEmail, message: \"Claim status updated and notification sent.\" } }}",
+        "options": {}
+      },
+      "id": "142d0096-954c-44b6-8af6-774014ded724",
+      "name": "Respond1",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1456,
+        96
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook1": {
+      "main": [
+        [
+          {
+            "node": "Get Claim1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Claim1": {
+      "main": [
+        [
+          {
+            "node": "Build Notification1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Notification1": {
+      "main": [
+        [
+          {
+            "node": "Update Status1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Status1": {
+      "main": [
+        [
+          {
+            "node": "Send Email1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email1": {
+      "main": [
+        [
+          {
+            "node": "Respond1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "b0de2377-f9d2-4430-a573-660868ebd08e",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "6c88e9ba816fa3c2c21cc6f51641bc44d7a6e14d10bcd648c3e55bddc47779ac"
+  },
+  "nodeGroups": [],
+  "id": "SBzTFaA6DlqgN7nZ",
+  "tags": []
+}

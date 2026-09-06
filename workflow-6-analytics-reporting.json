@@ -1,0 +1,424 @@
+{
+  "name": "Workflow 6 - Analytics & Reporting",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [
+                1
+              ],
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "id": "95037771-7b06-4625-988c-246e562f9e67",
+      "name": "Weekly Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        128,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appxYnrhgf7b3FGkV",
+          "mode": "list",
+          "cachedResultName": "AI Insurance Claim Processing",
+          "cachedResultUrl": "https://airtable.com/appxYnrhgf7b3FGkV"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblw6LJymbNlLEyxd",
+          "mode": "list",
+          "cachedResultName": "Claims",
+          "cachedResultUrl": "https://airtable.com/appxYnrhgf7b3FGkV/tblw6LJymbNlLEyxd"
+        },
+        "filterByFormula": "=IS_AFTER(CREATED_TIME(), DATEADD(NOW(), -7, 'days'))",
+        "options": {}
+      },
+      "id": "c8eb5e17-2d47-4084-b26a-cd9720892d52",
+      "name": "Get Claims (Last 7 Days)",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [
+        272,
+        -176
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "HjfLUWzTpbOTuvmr",
+          "name": "Airtable account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Compute weekly claim statistics from the Claims records fetched above.\nconst items = $input.all();\n\nconst PENDING_STATUSES = ['Submitted', 'Under Review', 'Additional Documents Required'];\nconst DECIDED_STATUSES = ['Approved', 'Rejected', 'Closed'];\n\nlet approved = 0;\nlet rejected = 0;\nlet pending = 0;\nlet suspiciousCount = 0;\nconst claimTypeBreakdown = {};\nconst priorityBreakdown = {};\nconst processingTimesDays = [];\nconst claimLines = [];\n\nfor (const item of items) {\n  // Handle both possible Airtable output shapes: nested under 'fields', or flattened onto $json directly\n  const src = (item.json.fields && typeof item.json.fields === 'object') ? item.json.fields : item.json;\n  const claimId = item.json.id;\n  const claimantName = src['Claimant Name'] || 'Unknown';\n  const claimType = src['Claim Type'] || 'Other';\n  const status = src['Status'] || 'Submitted';\n  const priority = src['Priority'] || 'Medium';\n  const suspicious = src['Suspicious'] === true;\n  const submittedDate = src['Submitted Date'];\n  const createdTime = item.json.createdTime;\n\n  if (status === 'Approved') approved++;\n  else if (status === 'Rejected') rejected++;\n  else if (PENDING_STATUSES.includes(status)) pending++;\n\n  if (suspicious) suspiciousCount++;\n\n  claimTypeBreakdown[claimType] = (claimTypeBreakdown[claimType] || 0) + 1;\n  priorityBreakdown[priority] = (priorityBreakdown[priority] || 0) + 1;\n\n  if (DECIDED_STATUSES.includes(status) && submittedDate && createdTime) {\n    const days = (new Date(submittedDate) - new Date(createdTime)) / (1000 * 60 * 60 * 24);\n    if (days >= 0) processingTimesDays.push(days);\n  }\n\n  claimLines.push(`${claimId} | ${claimantName} | ${claimType} | ${status} | ${priority}${suspicious ? ' | FLAGGED' : ''}`);\n}\n\nconst totalClaims = items.length;\nconst avgProcessingDays = processingTimesDays.length\n  ? Math.round((processingTimesDays.reduce((a, b) => a + b, 0) / processingTimesDays.length) * 10) / 10\n  : 0;\n\nconst end = new Date();\nconst start = new Date(end.getTime() - 7 * 24 * 60 * 60 * 1000);\nconst fmt = (d) => d.toISOString().slice(0, 10);\nconst reportPeriod = `${fmt(start)} to ${fmt(end)}`;\n\nreturn {\n  json: {\n    reportPeriod,\n    totalClaims,\n    approved,\n    rejected,\n    pending,\n    suspiciousCount,\n    avgProcessingDays,\n    claimTypeBreakdown,\n    priorityBreakdown,\n    claimsSummaryText: claimLines.length ? claimLines.join('\\n') : 'No claims recorded in this period.'\n  }\n};"
+      },
+      "id": "eb106673-b0ea-4aa7-907a-1b1a984ab509",
+      "name": "Compute Report Stats",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        432,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  system_instruction: {\n    parts: [\n      { text: \"You are an insurance operations analyst. Write a concise, factual weekly claims summary for internal stakeholders: 3-5 short bullet points covering volume, approval/rejection trends, processing speed, and any flagged/suspicious claims worth attention. No preamble, no markdown headers, plain bullet lines only.\" }\n    ]\n  },\n  contents: [\n    {\n      role: \"user\",\n      parts: [\n        { text: `Report period: ${$json.reportPeriod}\\nTotal claims: ${$json.totalClaims}\\nApproved: ${$json.approved}\\nRejected: ${$json.rejected}\\nPending: ${$json.pending}\\nFlagged as suspicious: ${$json.suspiciousCount}\\nAverage processing time (days): ${$json.avgProcessingDays}\\nClaim type breakdown: ${JSON.stringify($json.claimTypeBreakdown)}\\nPriority breakdown: ${JSON.stringify($json.priorityBreakdown)}\\n\\nClaims this period:\\n${$json.claimsSummaryText}` }\n      ]\n    }\n  ],\n  generationConfig: {\n    temperature: 0.3,\n    maxOutputTokens: 400\n  }\n}) }}",
+        "options": {}
+      },
+      "id": "2f9a5c21-e5e9-44cf-9dbd-86059542e028",
+      "name": "Generate AI Insights (Gemini)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        560,
+        -176
+      ],
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "06CakqYcqYZqtp9N",
+          "name": "Query Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge the computed stats with the AI-generated insights into the final report record.\nconst stats = $('Compute Report Stats').item.json;\nconst aiResponse = $json;\n\nlet aiInsights = 'AI insights unavailable for this period.';\ntry {\n  const candidate = aiResponse.candidates && aiResponse.candidates[0];\n  const content = candidate && candidate.content && candidate.content.parts && candidate.content.parts[0]\n    ? candidate.content.parts[0].text\n    : null;\n  if (content) aiInsights = content.trim();\n} catch (e) {\n  // fall back to default message above\n}\n\nreturn {\n  json: {\n    reportPeriod: stats.reportPeriod,\n    totalClaims: stats.totalClaims,\n    approved: stats.approved,\n    rejected: stats.rejected,\n    pending: stats.pending,\n    avgProcessingDays: stats.avgProcessingDays,\n    suspiciousCount: stats.suspiciousCount,\n    claimTypeBreakdown: stats.claimTypeBreakdown,\n    priorityBreakdown: stats.priorityBreakdown,\n    aiInsights,\n    reportDate: $now.toISO()\n  }\n};"
+      },
+      "id": "e0cf1723-13e1-4db6-a1ab-fb7cef3494f3",
+      "name": "Build Report Record",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        704,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appxYnrhgf7b3FGkV",
+          "mode": "list",
+          "cachedResultName": "AI Insurance Claim Processing",
+          "cachedResultUrl": "https://airtable.com/appxYnrhgf7b3FGkV"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblUUKyaSojDZbRrX",
+          "mode": "list",
+          "cachedResultName": "Reports",
+          "cachedResultUrl": "https://airtable.com/appxYnrhgf7b3FGkV/tblUUKyaSojDZbRrX"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Report Period": "={{ $json.reportPeriod }}",
+            "Total Claims": "={{ $json.totalClaims }}",
+            "Claims Approved": "={{ $json.approved }}",
+            "Claims Rejected": "={{ $json.rejected }}",
+            "Claims Pending": "={{ $json.pending }}",
+            "Avg Processing Time (Days)": "={{ $json.avgProcessingDays }}",
+            "AI Insights": "={{ $json.aiInsights }}",
+            "Report Date": "={{ $json.reportDate }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Report Period",
+              "displayName": "Report Period",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Total Claims",
+              "displayName": "Total Claims",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Claims Approved",
+              "displayName": "Claims Approved",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Claims Rejected",
+              "displayName": "Claims Rejected",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Claims Pending",
+              "displayName": "Claims Pending",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Avg Processing Time (Days)",
+              "displayName": "Avg Processing Time (Days)",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "AI Insights",
+              "displayName": "AI Insights",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Report Date",
+              "displayName": "Report Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "a3be1bed-5e6b-429a-91c0-93ce974edd7f",
+      "name": "Log Weekly Report",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [
+        880,
+        -160
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "HjfLUWzTpbOTuvmr",
+          "name": "Airtable account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build the email subject/body for the weekly report notification.\nconst r = $('Build Report Record').item.json;\n\nconst typeLines = Object.entries(r.claimTypeBreakdown || {}).map(([k, v]) => `  - ${k}: ${v}`).join('\\n');\nconst priorityLines = Object.entries(r.priorityBreakdown || {}).map(([k, v]) => `  - ${k}: ${v}`).join('\\n');\n\nconst subject = `Weekly Claims Report: ${r.reportPeriod}`;\n\nconst body = `Weekly Insurance Claims Report (${r.reportPeriod})\\n\\n` +\n  `Total Claims: ${r.totalClaims}\\n` +\n  `Approved: ${r.approved}\\n` +\n  `Rejected: ${r.rejected}\\n` +\n  `Pending: ${r.pending}\\n` +\n  `Flagged as Suspicious: ${r.suspiciousCount}\\n` +\n  `Average Processing Time: ${r.avgProcessingDays} days\\n\\n` +\n  `Claims by Type:\\n${typeLines || '  - none'}\\n\\n` +\n  `Claims by Priority:\\n${priorityLines || '  - none'}\\n\\n` +\n  `AI Insights:\\n${r.aiInsights}\\n`;\n\n// NOTE: replace with the real distribution address for your team\nconst recipientEmail = 'claims-team@example.com';\n\nreturn {\n  json: {\n    recipientEmail,\n    subject,\n    body\n  }\n};"
+      },
+      "id": "fe08cbc6-bec4-4927-82db-dde68083b1ed",
+      "name": "Build Report Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1008,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.recipientEmail }}",
+        "subject": "={{ $json.subject }}",
+        "emailType": "text",
+        "message": "={{ $json.body }}",
+        "options": {}
+      },
+      "id": "095dabd5-6583-4f6c-8047-1c852fb62182",
+      "name": "Send Report Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1168,
+        -160
+      ],
+      "webhookId": "b3a7e6d2-9f4c-4a1b-8e2d-6a5c4f0e9b1d",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "PtDgUWHe1LIiQKdx",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://discord.com/api/webhooks/1539734659041198082/P79wOdzJLY8ibCzngqVbli3b3EaVtoxZCgU7pv9IE3o76b_eu-ab7_wwgo8lzbZlD123",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ content: $('Build Report Email').item.json.subject + \"\\n\\n\" + $('Build Report Record').item.json.aiInsights }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1328,
+        80
+      ],
+      "id": "0b6bdee4-b635-406a-a801-95eeee3b4685",
+      "name": "HTTP Request"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Weekly Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Claims (Last 7 Days)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Claims (Last 7 Days)": {
+      "main": [
+        [
+          {
+            "node": "Compute Report Stats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Report Stats": {
+      "main": [
+        [
+          {
+            "node": "Generate AI Insights (Gemini)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate AI Insights (Gemini)": {
+      "main": [
+        [
+          {
+            "node": "Build Report Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Report Record": {
+      "main": [
+        [
+          {
+            "node": "Log Weekly Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Weekly Report": {
+      "main": [
+        [
+          {
+            "node": "Build Report Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Report Email": {
+      "main": [
+        [
+          {
+            "node": "Send Report Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Report Email": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "daf9e0df-e98b-4fae-bd66-fd11e39bf3b4",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "6c88e9ba816fa3c2c21cc6f51641bc44d7a6e14d10bcd648c3e55bddc47779ac"
+  },
+  "nodeGroups": [],
+  "id": "b3tVGQWQBI7nb7G6",
+  "tags": []
+}
