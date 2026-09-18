@@ -1,6 +1,6 @@
 # AI Insurance Claim Processing System
 
-An AI-powered insurance claim processing system with no frontend — all requests simulated via Postman. The solution automates the complete insurance claim lifecycle using multiple automation platforms and free services.
+An AI-powered insurance claim processing system with no frontend all requests simulated via Postman. The solution automates the complete insurance claim lifecycle using multiple automation platforms and free services.
 
 ## Platforms & Tools
 - Postman
